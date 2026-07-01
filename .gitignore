@@ -1,0 +1,41 @@
+# Python bytecode cache
+# Python 字节码缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution / packaging
+# 分发 / 打包
+dist/
+build/
+*.egg-info/
+*.egg
+
+# IDE configurations
+# IDE 配置文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Analysis output files
+# 分析输出文件
+*.csv
+output/
+
+# DNA files (large binary, should not be committed)
+# DNA 文件（大型二进制文件，不应提交）
+*.dna
+*.json
+
+# OS generated files
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+# 虚拟环境
+venv/
+.env/

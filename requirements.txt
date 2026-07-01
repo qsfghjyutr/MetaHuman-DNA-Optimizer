@@ -1,0 +1,3 @@
+# No external dependencies required.
+# Requires MetaHuman DNA Calibration's pre-built dna/dnacalib Python modules.
+# See README.md for setup instructions.
