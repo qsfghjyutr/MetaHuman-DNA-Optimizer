@@ -83,11 +83,12 @@ def load_dna(dna_path: str, load_geometry: bool = True) -> DNAData:
         DataLayer_Behavior,
         FileStream,
         Status,
+        UnknownLayerPolicy_Preserve,
     )
 
     layer = DataLayer_All if load_geometry else DataLayer_Behavior
     stream = FileStream(dna_path, FileStream.AccessMode_Read, FileStream.OpenMode_Binary)
-    reader = BinaryStreamReader(stream, layer)
+    reader = BinaryStreamReader(stream, layer, UnknownLayerPolicy_Preserve)
     reader.read()
 
     if not Status.isOk():

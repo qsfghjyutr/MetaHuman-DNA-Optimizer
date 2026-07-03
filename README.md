@@ -54,19 +54,26 @@ MetaHuman-DNA-Optimizer/
 ├── src/
 │   └── dna_optimizer/
 │       ├── __init__.py            # Package init / 包初始化
+│       ├── lib_setup.py           # MetaHuman for Maya lib path auto-discovery
+│       │                          # MetaHuman for Maya 库路径自动发现
 │       ├── dna_io.py              # DNA file reading via BinaryStreamReader API
 │       │                          # 通过 BinaryStreamReader API 读取 DNA 文件
 │       ├── dependency_graph.py    # Dependency graph: raw control → PSD → BS/AM/Joint
 │       │                          # 依赖图：原始控制器 → PSD → BS/AM/关节
 │       ├── scoring.py             # 6-dimension importance scoring engine
 │       │                          # 6 维重要性评分引擎
-│       ├── analyzer.py            # Orchestrator: load → graph → score → report
-│       │                          # 编排器：加载 → 建图 → 评分 → 报告
+│       ├── analyzer.py            # Orchestrator: load → graph → score → report → prune
+│       │                          # 编排器：加载 → 建图 → 评分 → 报告 → 裁剪
+│       ├── pruner.py              # Pruning execution engine (L0/L1/L2)
+│       │                          # 裁剪执行引擎（L0/L1/L2）
 │       └── reporter.py            # CSV export and console summary output
 │                                  # CSV 导出和控制台摘要输出
 │
 ├── scripts/
-│   └── analyze.py                 # CLI entry point / 命令行入口
+│   ├── analyze.py                 # Analysis CLI entry point / 分析命令行入口
+│   ├── prune.py                   # Pruning CLI entry point / 裁剪命令行入口
+│   ├── gui.py                     # PySide6 GUI application / PySide6 图形界面应用
+│   └── debug_readwrite.py         # DNA read/write pipeline diagnostic / DNA 读写管线诊断
 │
 ├── tests/
 └── docs/
@@ -74,53 +81,159 @@ MetaHuman-DNA-Optimizer/
 
 ## Prerequisites / 前置要求
 
-- Python 3.7+ (Maya's `mayapy` or standalone Python)
-- Python 3.7+（Maya 的 `mayapy` 或独立 Python）
-- [MetaHuman DNA Calibration](https://github.com/EpicGames/MetaHuman-DNA-Calibration) pre-built libraries (`dna` and `dnacalib` Python modules)
-- [MetaHuman DNA Calibration](https://github.com/EpicGames/MetaHuman-DNA-Calibration) 预编译库（`dna` 和 `dnacalib` Python 模块）
+- **Maya 2022–2025** with `mayapy` (Maya's Python interpreter)
+- Maya 2022–2025 及其 `mayapy`（Maya 的 Python 解释器）
+- **[MetaHuman for Maya](https://www.fab.com/) plugin** (provides PyDNA 9.4.4 + PyDNACalib2 3.2.0, supports DNA v2.1–v2.5)
+- [MetaHuman for Maya](https://www.fab.com/) 插件（提供 PyDNA 9.4.4 + PyDNACalib2 3.2.0，支持 DNA v2.1–v2.5）
+- **PySide6** (only required for GUI mode; bundled with Maya 2025's `mayapy`) / **PySide6**（仅 GUI 模式需要；Maya 2025 的 `mayapy` 已内置）
 
-The pre-built libraries are located in the DNA Calibration repository under `lib/Maya{VERSION}/{platform}/`. Supported versions:
+The plugin is available on [Fab](https://www.fab.com/) (search "MetaHuman for Maya") and installs to:
 
-预编译库位于 DNA Calibration 仓库的 `lib/Maya{VERSION}/{platform}/` 目录下。支持的版本：
+插件可在 [Fab](https://www.fab.com/) 上获取（搜索"MetaHuman for Maya"），默认安装位置为：
 
-- Maya 2022 (Python 3.7)
-- Maya 2023 (Python 3.9)
-- Maya 2024 (Python 3.10)
+```
+C:\Program Files\Epic Games\MetaHumanForMaya\
+```
+
+**Note / 注意**: `mayapy` is not typically in the system PATH. Use the full path to your Maya installation's `mayapy.exe`:
+
+**注意**：`mayapy` 通常不在系统 PATH 中，需要使用 Maya 安装目录下的完整路径：
+
+```powershell
+# Windows PowerShell example / Windows PowerShell 示例
+& "D:\Program Files (x86)\Autodesk\Maya2025\bin\mayapy.exe" scripts/analyze.py --dna character.dna
+
+# Or add Maya's bin directory to your PATH once / 或者将 Maya 的 bin 目录添加到 PATH
+$env:PATH = "D:\Program Files (x86)\Autodesk\Maya2025\bin;" + $env:PATH
+```
 
 ## Usage / 使用方式
 
+> All commands below use **PowerShell** syntax: `&` call operator, `` ` `` line continuation, `$env:` for environment variables.
+>
+> 以下所有命令均使用 **PowerShell** 语法：`&` 调用运算符、`` ` `` 续行符、`$env:` 设置环境变量。
+
 ### Basic Analysis / 基本分析
 
-```bash
-# Using Maya's Python interpreter
-# 使用 Maya 的 Python 解释器
-mayapy scripts/analyze.py \
-  --dna path/to/character.dna \
-  --lib path/to/MetaHuman-DNA-Calibration/lib/Maya2023/windows \
+```powershell
+& "path/to/mayapy.exe" scripts/analyze.py `
+  --dna path/to/character.dna `
+  --lib "C:/Program Files/Epic Games/MetaHumanForMaya" `
   --output report.csv
 ```
 
-### Options / 参数说明
+### Pruning Execution / 裁剪执行
+
+Analyze the DNA file and generate a pruned output. The **source file is never modified** — a new pruned DNA file is written to `--output`.
+
+分析 DNA 文件并生成裁剪后的输出。**源文件不会被修改** — 裁剪后的 DNA 写入 `--output` 指定的新文件。
+
+```powershell
+# Full pruning (L0 + L1 + L2) / 完整裁剪
+& "path/to/mayapy.exe" scripts/prune.py `
+  --dna path/to/character.dna `
+  --lib "C:/Program Files/Epic Games/MetaHumanForMaya" `
+  --output pruned.dna
+
+# L0 only (most aggressive, for testing) / 仅 L0（最激进，用于测试）
+& "path/to/mayapy.exe" scripts/prune.py `
+  --dna path/to/character.dna `
+  --lib "C:/Program Files/Epic Games/MetaHumanForMaya" `
+  --output pruned_l0.dna `
+  --levels L0
+
+# Custom thresholds / 自定义阈值
+& "path/to/mayapy.exe" scripts/prune.py `
+  --dna path/to/character.dna `
+  --lib "C:/Program Files/Epic Games/MetaHumanForMaya" `
+  --output pruned.dna `
+  --l0-threshold 15.0 --l1-threshold 40.0 --l2-delta 0.005
+```
+
+### Analysis Options / 分析参数
 
 | Option / 参数 | Description / 描述 |
 |--------|-------------|
 | `--dna` | Path to input .dna file (required) / 输入 .dna 文件路径（必填） |
-| `--lib` | Path to DNA Calibration lib directory. Can also use `DNA_CALIB_LIB` env var / DNA Calibration 库目录路径，也可通过 `DNA_CALIB_LIB` 环境变量设置 |
+| `--lib` | Path to MetaHuman for Maya installation directory. Can also use `MH4M_ROOT` env var / MetaHuman for Maya 安装目录路径，也可通过 `MH4M_ROOT` 环境变量设置 |
 | `--output`, `-o` | Output CSV file path. If omitted, only prints console summary / 输出 CSV 文件路径，省略则仅打印控制台摘要 |
 | `--no-geometry` | Skip geometry layer loading for faster analysis (disables delta magnitude scoring) / 跳过几何层加载以加快分析（禁用位移幅度评分） |
 | `--l0-threshold` | Importance score threshold for L0 suggestion (default: 20.0) / L0 建议的重要性分数阈值（默认：20.0） |
 | `--l1-threshold` | Importance score threshold for L1 suggestion (default: 50.0) / L1 建议的重要性分数阈值（默认：50.0） |
 
+### Pruning Options / 裁剪参数
+
+| Option / 参数 | Description / 描述 |
+|--------|-------------|
+| `--dna` | Path to input .dna file (required) / 输入 .dna 文件路径（必填） |
+| `--output`, `-o` | Path to write pruned .dna file (required) / 输出裁剪后的 .dna 文件路径（必填） |
+| `--lib` | Path to MetaHuman for Maya installation directory / MetaHuman for Maya 安装目录路径 |
+| `--levels` | Pruning levels to apply: `L0` `L1` `L2` (default: all three) / 要应用的裁剪级别（默认：全部三级） |
+| `--l0-threshold` | Importance score threshold for L0 (default: 20.0) / L0 重要性分数阈值 |
+| `--l1-threshold` | Importance score threshold for L1 (default: 50.0) / L1 重要性分数阈值 |
+| `--l2-delta` | Delta magnitude threshold for L2 pruning (default: 0.001) / L2 位移幅度阈值 |
+| `--no-geometry` | Skip geometry layer loading / 跳过几何层加载 |
+| `--report` | Optional: write analysis report CSV / 可选：输出分析报告 CSV |
+
 ### Environment Variable / 环境变量
 
-```bash
-# Set once, use everywhere
-# 设置一次，到处使用
-export DNA_CALIB_LIB=path/to/MetaHuman-DNA-Calibration/lib/Maya2023/windows
-mayapy scripts/analyze.py --dna character.dna -o report.csv
+```powershell
+# Set once, use everywhere / 设置一次，到处使用
+$env:MH4M_ROOT = "C:\Program Files\Epic Games\MetaHumanForMaya"
+& "path/to/mayapy.exe" scripts/prune.py --dna character.dna -o pruned.dna
 ```
 
+### GUI Mode / 图形界面模式
+
+A PySide6-based GUI for interactive analysis and pruning (requires PySide6).
+
+基于 PySide6 的图形界面，支持交互式分析与裁剪（需要 PySide6）。
+
+```powershell
+& "path/to/mayapy.exe" scripts/gui.py
+```
+
+Features / 功能特性：
+
+- Sortable table with all raw controls, color-coded by pruning level (red=L0, yellow=L1, green=keep)
+- 可排序的表格，按裁剪级别着色显示所有原始控制器（红色=L0，黄色=L1，绿色=keep）
+- Per-row level editing via dropdown (L0/L1/keep) and checkbox selection
+- 每行可通过下拉菜单（L0/L1/keep）和复选框单独调整裁剪级别
+- Real-time L0/L1 threshold sliders that reclassify all rows instantly
+- 实时 L0/L1 阈值滑块，即时重新分类所有行
+- Live pruning impact estimates (BS/AM/Joint removal percentages) that update as you adjust selections
+- 实时裁剪影响预估（BS/AM/Joint 移除百分比），随选择调整实时更新
+- Name search and level filter
+- 名称搜索和级别筛选
+- Background thread execution for analysis and pruning (non-blocking UI)
+- 分析和裁剪在后台线程执行（界面不卡顿）
+
+### Debug Read/Write Pipeline / 调试读写管线
+
+A diagnostic script that tests the DNA read/write pipeline step by step, generating multiple output files to isolate where corruption might occur. Useful for verifying DNACalib operations independently.
+
+逐步测试 DNA 读写管线的诊断脚本，生成多个输出文件以定位可能发生损坏的环节。适用于独立验证 DNACalib 操作。
+
+```powershell
+& "path/to/mayapy.exe" scripts/debug_readwrite.py `
+  --dna path/to/character.dna `
+  --lib "C:/Program Files/Epic Games/MetaHumanForMaya"
+```
+
+The script produces 4 test files in the same directory as the input DNA:
+
+脚本在输入 DNA 同目录下生成 4 个测试文件：
+
+| Output File / 输出文件 | Test / 测试内容 |
+|--------|-------------|
+| `test_passthrough.dna` | Pure read → write with no modifications / 纯读写，无任何修改 |
+| `test_calibrated.dna` | Read → DNACalibDNAReader → write (no commands) / 经过 DNACalibDNAReader，不执行命令 |
+| `test_remove_1bs.dna` | Remove 1 BS channel only / 仅移除 1 个 BS 通道 |
+| `test_joint_zero.dna` | Zero 1 joint group column only / 仅置零 1 个关节组列 |
+
 ## Example Output / 示例输出
+
+### Analysis / 分析
 
 ```
 ======================================================================
@@ -154,6 +267,31 @@ Top 10 (highest importance - must keep):
 ======================================================================
 ```
 
+### Pruning / 裁剪
+
+```
+======================================================================
+Pruning Summary
+======================================================================
+
+L0 - Full removal:
+  BS channels removed:       138
+  Animated maps removed:      12
+  Joint matrix entries zeroed: 89061
+
+L1 - PSD correction removal:
+  BS channels removed:       445
+
+L2 - Delta pruning:
+  Threshold: 0.001
+
+Total BS channels removed: 583 / 687 (84.9%)
+Total AM removed: 12 / 82 (14.6%)
+
+Output: pruned.dna
+======================================================================
+```
+
 ## CSV Output Format / CSV 输出格式
 
 The output CSV contains one row per raw control, sorted by importance (ascending):
@@ -181,11 +319,11 @@ The output CSV contains one row per raw control, sorted by importance (ascending
 
 ## Roadmap / 路线图
 
-- [ ] **L0 pruning execution / L0 裁剪执行**: Implement raw control removal (DNACalib lacks this command, requires direct DNA data manipulation) / 实现原始控制器移除（DNACalib 缺少此命令，需要直接操作 DNA 数据）
-- [ ] **L1 pruning execution / L1 裁剪执行**: Generate DNACalib scripts using `RemoveBlendShapeCommand` for PSD correction BS removal / 使用 `RemoveBlendShapeCommand` 生成 DNACalib 脚本以移除 PSD 修正 BS
-- [ ] **L2 pruning execution / L2 裁剪执行**: Apply `PruneBlendShapeTargetsCommand` with configurable threshold / 使用可配置阈值应用 `PruneBlendShapeTargetsCommand`
-- [ ] **Visual comparison / 可视化对比**: Before/after rig preview in Maya / Maya 中裁剪前后的骨骼预览对比
-- [ ] **Batch processing / 批量处理**: Analyze multiple DNA files at once / 一次分析多个 DNA 文件
+- [x] **Expression importance analysis / 表情重要性分析**: 6-dimension scoring with dependency graph / 基于依赖图的 6 维评分
+- [x] **L0 pruning execution / L0 裁剪执行**: Remove downstream BS + AM, zero joint matrix columns / 移除下游 BS + AM，置零关节矩阵列
+- [x] **L1 pruning execution / L1 裁剪执行**: Remove PSD correction BS via `RemoveBlendShapeCommand` / 使用 `RemoveBlendShapeCommand` 移除 PSD 修正 BS
+- [x] **L2 pruning execution / L2 裁剪执行**: Apply `PruneBlendShapeTargetsCommand` with configurable threshold / 使用可配置阈值应用 `PruneBlendShapeTargetsCommand`
+- [x] **GUI application / 图形界面应用**: Interactive PySide6 GUI with sortable table, threshold sliders, per-row level editing, and real-time pruning estimates / 交互式 PySide6 图形界面，支持可排序表格、阈值滑块、逐行级别编辑和实时裁剪预估
 
 ## License / 许可证
 
