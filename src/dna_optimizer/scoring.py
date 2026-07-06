@@ -3,7 +3,7 @@
 
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .dna_io import DNAData
 from .dependency_graph import DependencyGraph, get_raw_control_downstream
@@ -62,6 +62,7 @@ class RawControlScore:
     # 综合评分
     importance: float = 0.0
     suggested_level: str = "keep"  # "L0", "L1", "keep"
+    filtered: bool = False  # True if protected by keep list / 被 keep list 保护
 
 
 def compute_scores(
@@ -70,6 +71,7 @@ def compute_scores(
     weights: Dict[str, float] = None,
     l0_threshold: float = 20.0,
     l1_threshold: float = 50.0,
+    keep_list: Optional[List[str]] = None,
 ) -> List[RawControlScore]:
     """Compute importance scores for all raw controls.
     计算所有原始控制器的重要性评分。
@@ -85,6 +87,8 @@ def compute_scores(
                       低于此分数 -> 建议 L0（完全移除）。
         l1_threshold: Score below this -> suggest L1 (simplify PSD corrections).
                       低于此分数 -> 建议 L1（简化 PSD 修正）。
+        keep_list: Curve name patterns to always keep (substring match).
+                   始终保留的曲线名称模式（子串匹配）。
     """
     w = weights or DEFAULT_WEIGHTS
     scores = []
@@ -165,7 +169,12 @@ def compute_scores(
             + w.get("runtime", 0) * s.runtime_score
         )
 
-        if s.importance < l0_threshold:
+        # Check keep list (substring match) before threshold classification
+        # 在阈值分级前检查 keep list（子串匹配）
+        if keep_list and any(pattern in s.name for pattern in keep_list):
+            s.suggested_level = "keep"
+            s.filtered = True
+        elif s.importance < l0_threshold:
             s.suggested_level = "L0"
         elif s.importance < l1_threshold:
             s.suggested_level = "L1"

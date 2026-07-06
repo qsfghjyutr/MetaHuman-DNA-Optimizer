@@ -17,6 +17,7 @@ def analyze(
     l0_threshold: float = 20.0,
     l1_threshold: float = 50.0,
     load_geometry: bool = True,
+    keep_list: Optional[List[str]] = None,
 ) -> List[RawControlScore]:
     """Run full importance analysis on a DNA file.
     对 DNA 文件运行完整的重要性分析。
@@ -60,6 +61,7 @@ def analyze(
         weights=weights,
         l0_threshold=l0_threshold,
         l1_threshold=l1_threshold,
+        keep_list=keep_list,
     )
 
     print_summary(scores, total_bs_channels=data.bs_channel_count)
@@ -81,6 +83,7 @@ def analyze_and_prune(
     load_geometry: bool = True,
     report_csv: Optional[str] = None,
     weights: Optional[Dict[str, float]] = None,
+    keep_list: Optional[List[str]] = None,
 ) -> Tuple[List[RawControlScore], PruneResult]:
     """One-shot: analyze importance then execute pruning.
     一站式：分析重要性然后执行裁剪。
@@ -120,6 +123,7 @@ def analyze_and_prune(
         weights=weights,
         l0_threshold=l0_threshold,
         l1_threshold=l1_threshold,
+        keep_list=keep_list,
     )
 
     print_summary(scores, total_bs_channels=data.bs_channel_count)

@@ -49,6 +49,11 @@ def main():
         type=float, default=50.0,
         help="Importance score threshold for L1 (simplify PSD) suggestion. Default: 50.0",
     )
+    parser.add_argument(
+        "--keep", nargs="+", default=None,
+        help="Curve name patterns to always keep regardless of score (substring match). "
+             "Example: --keep eyeBlinkL eyeBlinkR",
+    )
 
     args = parser.parse_args()
 
@@ -87,6 +92,7 @@ def main():
         l0_threshold=args.l0_threshold,
         l1_threshold=args.l1_threshold,
         load_geometry=not args.no_geometry,
+        keep_list=args.keep,
     )
 
 

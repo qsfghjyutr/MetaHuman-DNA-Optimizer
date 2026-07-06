@@ -27,6 +27,7 @@ from PySide6.QtGui import QColor
 COLOR_L0 = QColor(255, 220, 220)
 COLOR_L1 = QColor(255, 245, 200)
 COLOR_KEEP = QColor(220, 255, 220)
+COLOR_FILTER = QColor(200, 220, 255)
 
 # Table column definitions: (header, field_name)
 COLUMNS = [
@@ -56,10 +57,11 @@ class AnalyzeWorker(QThread):
     error = Signal(str)
     log = Signal(str)
 
-    def __init__(self, dna_path, lib_path):
+    def __init__(self, dna_path, lib_path, keep_list=None):
         super().__init__()
         self.dna_path = dna_path
         self.lib_path = lib_path
+        self.keep_list = keep_list
 
     def run(self):
         try:
@@ -79,7 +81,7 @@ class AnalyzeWorker(QThread):
             graph = build_dependency_graph(data)
 
             self.log.emit("Computing scores...")
-            scores = compute_scores(data, graph)
+            scores = compute_scores(data, graph, keep_list=self.keep_list)
 
             self.log.emit("Analysis complete.")
             self.result_ready.emit(scores, graph, data)
@@ -162,6 +164,9 @@ class MainWindow(QMainWindow):
 
         # --- Threshold controls ---
         layout.addLayout(self._build_threshold_section())
+
+        # --- Keep list ---
+        layout.addLayout(self._build_keep_list_section())
 
         # --- Table ---
         self.table = QTableWidget()
@@ -290,6 +295,60 @@ class MainWindow(QMainWindow):
 
         return layout
 
+    def _build_keep_list_section(self):
+        layout = QHBoxLayout()
+
+        layout.addWidget(QLabel("Keep List:"))
+        self.keep_input = QLineEdit()
+        self.keep_input.setPlaceholderText("Enter curve name pattern and click Add...")
+        layout.addWidget(self.keep_input, stretch=1)
+
+        btn_add = QPushButton("Add")
+        btn_add.setFixedWidth(60)
+        btn_add.clicked.connect(self._add_keep_pattern)
+        layout.addWidget(btn_add)
+
+        self.keep_label = QLabel("")
+        self.keep_label.setStyleSheet("color: #336; font-style: italic;")
+        layout.addWidget(self.keep_label, stretch=1)
+
+        btn_clear = QPushButton("Clear")
+        btn_clear.setFixedWidth(60)
+        btn_clear.clicked.connect(self._clear_keep_list)
+        layout.addWidget(btn_clear)
+
+        # Internal keep list storage with defaults
+        self._keep_list = ["eyeBlinkL", "eyeBlinkR"]
+        self._update_keep_label()
+
+        return layout
+
+    def _add_keep_pattern(self):
+        pattern = self.keep_input.text().strip()
+        if not pattern:
+            return
+        if pattern not in self._keep_list:
+            self._keep_list.append(pattern)
+        self.keep_input.clear()
+        self._update_keep_label()
+        # Re-apply thresholds to reflect new keep list
+        self._apply_thresholds()
+
+    def _clear_keep_list(self):
+        self._keep_list.clear()
+        self._update_keep_label()
+        self._apply_thresholds()
+
+    def _update_keep_label(self):
+        if self._keep_list:
+            self.keep_label.setText("Active: " + ", ".join(self._keep_list))
+        else:
+            self.keep_label.setText("")
+
+    def _is_filtered(self, name):
+        """Check if a curve name matches any pattern in the keep list."""
+        return any(pattern in name for pattern in self._keep_list)
+
     def _apply_thresholds(self):
         """Reclassify all rows based on current threshold spinbox values."""
         if not self.scores:
@@ -315,7 +374,14 @@ class MainWindow(QMainWindow):
             except ValueError:
                 continue
 
-            if importance < l0_thresh:
+            # Check keep list filter
+            name_item = self.table.item(row, 2)
+            name = name_item.text() if name_item else ""
+            is_filtered = self._is_filtered(name)
+
+            if is_filtered:
+                new_level = "keep"
+            elif importance < l0_thresh:
                 new_level = "L0"
             elif importance < l1_thresh:
                 new_level = "L1"
@@ -340,8 +406,11 @@ class MainWindow(QMainWindow):
                 cb_item.setCheckState(
                     Qt.Checked if new_level in ("L0", "L1") else Qt.Unchecked)
 
-            # Update row color
-            self._set_row_color(row, new_level)
+            # Update row color: filtered rows get special color
+            if is_filtered:
+                self._set_row_color(row, "filtered")
+            else:
+                self._set_row_color(row, new_level)
 
         self.table.blockSignals(False)
         self._update_status()
@@ -374,7 +443,10 @@ class MainWindow(QMainWindow):
 
         modified_scores = copy.deepcopy(self.scores)
         for s in modified_scores:
-            if s.index in checked_levels:
+            # Keep list filter takes priority over checkbox state
+            if self._is_filtered(s.name):
+                s.suggested_level = "keep"
+            elif s.index in checked_levels:
                 s.suggested_level = checked_levels[s.index]
             else:
                 s.suggested_level = "keep"
@@ -475,7 +547,8 @@ class MainWindow(QMainWindow):
         self.btn_analyze.setText("Analyzing...")
         self.status_label.setText("Analyzing...")
 
-        self.worker = AnalyzeWorker(dna_path, lib_path)
+        keep_list = self._keep_list if self._keep_list else None
+        self.worker = AnalyzeWorker(dna_path, lib_path, keep_list=keep_list)
         self.worker.result_ready.connect(self._on_analyze_done)
         self.worker.error.connect(self._on_worker_error)
         self.worker.log.connect(self._on_log)
@@ -558,8 +631,11 @@ class MainWindow(QMainWindow):
             combo.currentTextChanged.connect(self._on_level_changed)
             self.table.setCellWidget(row, 4, combo)
 
-            # Row color
-            self._set_row_color(row, s.suggested_level)
+            # Row color: filtered rows get special color
+            if s.filtered:
+                self._set_row_color(row, "filtered")
+            else:
+                self._set_row_color(row, s.suggested_level)
 
         self.table.setSortingEnabled(True)
         self.table.resizeColumnsToContents()
@@ -568,9 +644,8 @@ class MainWindow(QMainWindow):
 
     def _set_row_color(self, row, level):
         """Set background color for all cells in a row based on level."""
-        color = {"L0": COLOR_L0, "L1": COLOR_L1, "keep": COLOR_KEEP}.get(
-            level, QColor(255, 255, 255)
-        )
+        color = {"L0": COLOR_L0, "L1": COLOR_L1, "keep": COLOR_KEEP,
+                 "filtered": COLOR_FILTER}.get(level, QColor(255, 255, 255))
         for col in range(self.table.columnCount()):
             item = self.table.item(row, col)
             if item:
@@ -649,8 +724,14 @@ class MainWindow(QMainWindow):
         selected = 0
         l0_sel = 0
         l1_sel = 0
+        filtered = 0
 
         for row in range(total):
+            name_item = self.table.item(row, 2)
+            name = name_item.text() if name_item else ""
+            if self._is_filtered(name):
+                filtered += 1
+
             cb_item = self.table.item(row, 0)
             if cb_item and cb_item.checkState() == Qt.Checked:
                 selected += 1
@@ -660,10 +741,11 @@ class MainWindow(QMainWindow):
                 elif current_level == "L1":
                     l1_sel += 1
 
-        self.status_label.setText(
-            f"Selected: {selected}/{total}  |  "
-            f"L0: {l0_sel}  L1: {l1_sel}  keep: {selected - l0_sel - l1_sel}"
-        )
+        status = (f"Selected: {selected}/{total}  |  "
+                  f"L0: {l0_sel}  L1: {l1_sel}  keep: {total - selected}")
+        if filtered > 0:
+            status += f"  |  Filtered (forced keep): {filtered}"
+        self.status_label.setText(status)
         self._compute_pruning_estimates()
 
     # --- Prune ---

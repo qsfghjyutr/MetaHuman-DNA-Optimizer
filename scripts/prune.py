@@ -60,6 +60,11 @@ def main():
         help="Skip geometry layer loading for faster analysis (disables delta magnitude scoring).",
     )
     parser.add_argument(
+        "--keep", nargs="+", default=None,
+        help="Curve name patterns to always keep regardless of score (substring match). "
+             "Example: --keep eyeBlinkL eyeBlinkR",
+    )
+    parser.add_argument(
         "--report",
         default=None,
         help="Optional: write analysis report CSV before pruning.",
@@ -112,6 +117,7 @@ def main():
         l2_threshold=args.l2_delta,
         load_geometry=not args.no_geometry,
         report_csv=args.report,
+        keep_list=args.keep,
     )
 
 

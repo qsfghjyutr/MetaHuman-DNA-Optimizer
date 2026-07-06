@@ -24,6 +24,7 @@ CSV_HEADERS = [
     "joint_attrs",
     "am_count",
     "suggested_level",
+    "filtered",
 ]
 
 
@@ -52,6 +53,7 @@ def export_csv(scores: List[RawControlScore], output_path: str) -> None:
                 s.joint_attr_count,
                 s.am_count,
                 s.suggested_level,
+                s.filtered,
             ])
 
 
@@ -62,6 +64,7 @@ def print_summary(scores: List[RawControlScore], total_bs_channels: int = 0) -> 
     l0_count = sum(1 for s in scores if s.suggested_level == "L0")
     l1_count = sum(1 for s in scores if s.suggested_level == "L1")
     keep_count = sum(1 for s in scores if s.suggested_level == "keep")
+    filtered_count = sum(1 for s in scores if s.filtered)
 
     # Use sets to deduplicate BS channels shared across raw controls
     # 使用集合去重跨原始控制器共享的 BS 通道
@@ -90,6 +93,8 @@ def print_summary(scores: List[RawControlScore], total_bs_channels: int = 0) -> 
     print(f"  L0 (full removal):     {l0_count:3d} controls")
     print(f"  L1 (simplify PSD):     {l1_count:3d} controls")
     print(f"  keep:                  {keep_count:3d} controls")
+    if filtered_count > 0:
+        print(f"    (filtered/forced):   {filtered_count:3d} controls")
     print()
 
     # Estimated savings

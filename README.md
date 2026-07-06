@@ -43,6 +43,27 @@ This tool analyzes the dependency graph and scores each raw control (expression)
 | LOD Coverage / LOD 覆盖 | 0.05 | Number of LODs containing downstream BS/AM / 包含下游 BS/AM 的 LOD 层级数 |
 | Runtime Cost / 运行时开销 | 0.10 | Estimated per-frame computation cost / 预估的每帧计算开销 |
 
+## Keep List (Filter) / 保留列表（过滤器）
+
+Some expression curves are visually critical but may receive low importance scores (e.g. eye blink controls). The **Keep List** mechanism lets you protect these curves from pruning — they still participate in scoring and ranking, but are always classified as `keep` regardless of threshold settings.
+
+某些表情曲线在视觉上非常关键，但计算出的重要性分数可能较低（例如眨眼控制器）。**保留列表**机制允许你保护这些曲线不被裁剪 — 它们仍然参与评分和排序，但无论阈值如何设置，都始终被分类为 `keep`。
+
+**Matching rule / 匹配规则**: Substring match — entering `eyeBlinkL` will match `CTRL_expressions.eyeBlinkL`.
+
+**匹配规则**：子串匹配 — 输入 `eyeBlinkL` 即可匹配 `CTRL_expressions.eyeBlinkL`。
+
+```powershell
+# CLI: protect eye blink curves from pruning / CLI：保护眨眼曲线不被裁剪
+& "path/to/mayapy.exe" scripts/prune.py `
+  --dna character.dna -o pruned.dna `
+  --keep eyeBlinkL eyeBlinkR
+```
+
+In the GUI, the Keep List section provides an input field to add/remove patterns. Default entries: `eyeBlinkL`, `eyeBlinkR`. Filtered rows are highlighted in blue.
+
+在 GUI 中，保留列表区域提供输入框来添加/移除匹配模式。默认条目：`eyeBlinkL`、`eyeBlinkR`。被过滤保护的行以蓝色高亮显示。
+
 ## Project Structure / 项目结构
 
 ```
@@ -60,8 +81,8 @@ MetaHuman-DNA-Optimizer/
 │       │                          # 通过 BinaryStreamReader API 读取 DNA 文件
 │       ├── dependency_graph.py    # Dependency graph: raw control → PSD → BS/AM/Joint
 │       │                          # 依赖图：原始控制器 → PSD → BS/AM/关节
-│       ├── scoring.py             # 6-dimension importance scoring engine
-│       │                          # 6 维重要性评分引擎
+│       ├── scoring.py             # 6-dimension scoring engine + keep list filter
+│       │                          # 6 维评分引擎 + 保留列表过滤
 │       ├── analyzer.py            # Orchestrator: load → graph → score → report → prune
 │       │                          # 编排器：加载 → 建图 → 评分 → 报告 → 裁剪
 │       ├── pruner.py              # Pruning execution engine (L0/L1/L2)
@@ -160,6 +181,7 @@ Analyze the DNA file and generate a pruned output. The **source file is never mo
 | `--no-geometry` | Skip geometry layer loading for faster analysis (disables delta magnitude scoring) / 跳过几何层加载以加快分析（禁用位移幅度评分） |
 | `--l0-threshold` | Importance score threshold for L0 suggestion (default: 20.0) / L0 建议的重要性分数阈值（默认：20.0） |
 | `--l1-threshold` | Importance score threshold for L1 suggestion (default: 50.0) / L1 建议的重要性分数阈值（默认：50.0） |
+| `--keep` | Curve name patterns to always keep (substring match, multiple values) / 始终保留的曲线名称模式（子串匹配，可指定多个） |
 
 ### Pruning Options / 裁剪参数
 
@@ -173,6 +195,7 @@ Analyze the DNA file and generate a pruned output. The **source file is never mo
 | `--l1-threshold` | Importance score threshold for L1 (default: 50.0) / L1 重要性分数阈值 |
 | `--l2-delta` | Delta magnitude threshold for L2 pruning (default: 0.001) / L2 位移幅度阈值 |
 | `--no-geometry` | Skip geometry layer loading / 跳过几何层加载 |
+| `--keep` | Curve name patterns to always keep (substring match, multiple values) / 始终保留的曲线名称模式（子串匹配，可指定多个） |
 | `--report` | Optional: write analysis report CSV / 可选：输出分析报告 CSV |
 
 ### Environment Variable / 环境变量
@@ -195,14 +218,16 @@ A PySide6-based GUI for interactive analysis and pruning (requires PySide6).
 
 Features / 功能特性：
 
-- Sortable table with all raw controls, color-coded by pruning level (red=L0, yellow=L1, green=keep)
-- 可排序的表格，按裁剪级别着色显示所有原始控制器（红色=L0，黄色=L1，绿色=keep）
+- Sortable table with all raw controls, color-coded by pruning level (red=L0, yellow=L1, green=keep, blue=filtered)
+- 可排序的表格，按裁剪级别着色显示所有原始控制器（红色=L0，黄色=L1，绿色=keep，蓝色=被保留列表保护）
 - Per-row level editing via dropdown (L0/L1/keep) and checkbox selection
 - 每行可通过下拉菜单（L0/L1/keep）和复选框单独调整裁剪级别
 - Real-time L0/L1 threshold sliders that reclassify all rows instantly
 - 实时 L0/L1 阈值滑块，即时重新分类所有行
 - Live pruning impact estimates (BS/AM/Joint removal percentages) that update as you adjust selections
 - 实时裁剪影响预估（BS/AM/Joint 移除百分比），随选择调整实时更新
+- Keep List with default entries (`eyeBlinkL`, `eyeBlinkR`) — protected curves are always kept and highlighted in blue
+- 保留列表，预设 `eyeBlinkL`、`eyeBlinkR` — 被保护的曲线始终保留并以蓝色高亮
 - Name search and level filter
 - 名称搜索和级别筛选
 - Background thread execution for analysis and pruning (non-blocking UI)
@@ -316,6 +341,7 @@ The output CSV contains one row per raw control, sorted by importance (ascending
 | `joint_attrs` | Joint matrix non-zero entries / 关节矩阵非零条目数 |
 | `am_count` | Animated maps driven / 驱动的动画贴图数 |
 | `suggested_level` | Suggested pruning level: `L0`, `L1`, or `keep` / 建议裁剪级别 |
+| `filtered` | Whether protected by keep list (`True`/`False`) / 是否被保留列表保护 |
 
 ## Roadmap / 路线图
 
@@ -324,6 +350,7 @@ The output CSV contains one row per raw control, sorted by importance (ascending
 - [x] **L1 pruning execution / L1 裁剪执行**: Remove PSD correction BS via `RemoveBlendShapeCommand` / 使用 `RemoveBlendShapeCommand` 移除 PSD 修正 BS
 - [x] **L2 pruning execution / L2 裁剪执行**: Apply `PruneBlendShapeTargetsCommand` with configurable threshold / 使用可配置阈值应用 `PruneBlendShapeTargetsCommand`
 - [x] **GUI application / 图形界面应用**: Interactive PySide6 GUI with sortable table, threshold sliders, per-row level editing, and real-time pruning estimates / 交互式 PySide6 图形界面，支持可排序表格、阈值滑块、逐行级别编辑和实时裁剪预估
+- [x] **Keep List filter / 保留列表过滤**: Protect visually critical curves from pruning regardless of score (CLI `--keep` + GUI) / 保护视觉关键曲线不被裁剪，无论评分高低（CLI `--keep` + GUI）
 
 ## License / 许可证
 
