@@ -318,7 +318,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(btn_clear)
 
         # Internal keep list storage with defaults
-        self._keep_list = ["eyeBlinkL", "eyeBlinkR", "browRaise"]
+        self._keep_list = ["eyeBlinkL", "eyeBlinkR", "browRaise", "eyeLook"]
         self._update_keep_label()
 
         return layout

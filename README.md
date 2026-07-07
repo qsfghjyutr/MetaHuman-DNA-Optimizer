@@ -57,12 +57,12 @@ Some expression curves are visually critical but may receive low importance scor
 # CLI: protect eye blink curves from pruning / CLI：保护眨眼曲线不被裁剪
 & "path/to/mayapy.exe" scripts/prune.py `
   --dna character.dna -o pruned.dna `
-  --keep eyeBlinkL eyeBlinkR browRaise
+  --keep eyeBlinkL eyeBlinkR browRaise eyeLook
 ```
 
-In the GUI, the Keep List section provides an input field to add/remove patterns. Default entries: `eyeBlinkL`, `eyeBlinkR`, `browRaise`. Filtered rows are highlighted in blue.
+In the GUI, the Keep List section provides an input field to add/remove patterns. Default entries: `eyeBlinkL`, `eyeBlinkR`, `browRaise`, `eyeLook`. Filtered rows are highlighted in blue.
 
-在 GUI 中，保留列表区域提供输入框来添加/移除匹配模式。默认条目：`eyeBlinkL`、`eyeBlinkR`、`browRaise`。被过滤保护的行以蓝色高亮显示。
+在 GUI 中，保留列表区域提供输入框来添加/移除匹配模式。默认条目：`eyeBlinkL`、`eyeBlinkR`、`browRaise`、`eyeLook`。被过滤保护的行以蓝色高亮显示。
 
 ## Project Structure / 项目结构
 
@@ -226,8 +226,8 @@ Features / 功能特性：
 - 实时 L0/L1 阈值滑块，即时重新分类所有行
 - Live pruning impact estimates (BS/AM/Joint removal percentages) that update as you adjust selections
 - 实时裁剪影响预估（BS/AM/Joint 移除百分比），随选择调整实时更新
-- Keep List with default entries (`eyeBlinkL`, `eyeBlinkR`, `browRaise`) — protected curves are always kept and highlighted in blue
-- 保留列表，预设 `eyeBlinkL`、`eyeBlinkR`、`browRaise` — 被保护的曲线始终保留并以蓝色高亮
+- Keep List with default entries (`eyeBlinkL`, `eyeBlinkR`, `browRaise`, `eyeLook`) — protected curves are always kept and highlighted in blue
+- 保留列表，预设 `eyeBlinkL`、`eyeBlinkR`、`browRaise`、`eyeLook` — 被保护的曲线始终保留并以蓝色高亮
 - Name search and level filter
 - 名称搜索和级别筛选
 - Background thread execution for analysis and pruning (non-blocking UI)
