@@ -4,6 +4,16 @@ A tool for analyzing and optimizing MetaHuman DNA expression curves. It ranks ea
 
 MetaHuman DNA 表情曲线分析与优化工具。对每条表情按重要性排序，并建议分层裁剪策略，以减少文件大小、GPU morph target 开销和 CPU 关节计算负担。
 
+## Demo / 效果展示
+
+The demo below uses an official MetaHuman **LOD4** character. Five heads are shown side by side: the leftmost is the untouched original DNA (**zero pruning**), and the remaining four apply progressively more aggressive pruning from left to right. The **Loss** value floating above each head quantifies how far that pruned rig has drifted from the original — the higher the Loss, the more aggressive the pruning.
+
+下面的演示使用 MetaHuman 官方 **LOD4** 级别角色。视频中并排展示了五个头部：最左边是未经改动的原始 DNA（**零裁剪**），其余四个从左到右应用逐步增强的裁剪。每个头部上方悬浮的 **Loss** 值量化了裁剪后的模型绑定相对原始模型绑定的偏离程度 —— Loss 越高，裁剪越激进。
+
+[![MetaHuman DNA Optimizer — Pruning Demo](https://img.youtube.com/vi/Qq--bZNZmT8/maxresdefault.jpg)](https://www.youtube.com/watch?v=Qq--bZNZmT8)
+
+> ▶️ Click the thumbnail to watch on YouTube / 点击缩略图在 YouTube 观看
+
 ## How It Works / 工作原理
 
 MetaHuman DNA files encode a complex evaluation pipeline:
