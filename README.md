@@ -222,6 +222,8 @@ A PySide6-based GUI for interactive analysis and pruning (requires PySide6).
 
 基于 PySide6 的图形界面，支持交互式分析与裁剪（需要 PySide6）。
 
+![MetaHuman DNA Optimizer GUI](docs/gui-screenshot.png)
+
 ```powershell
 & "path/to/mayapy.exe" scripts/gui.py
 ```
